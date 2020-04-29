@@ -1,11 +1,8 @@
 import tensorflow as tf
 from tensorflow.keras import layers
-from tensorflow.keras import activations
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import time
 import os
-from sklearn.preprocessing import normalize
-import matplotlib.pyplot as plt
+from tensorflow.keras.callbacks import ModelCheckpoint, TensorBoard
 from numpy import array
 import pandas as pd
 import numpy as np
@@ -140,18 +137,36 @@ def test_return_prediction(test_dataset):
 if __name__ == '__main__':
 
     site = '市民太原路口'
-    model = cnn_model(100, 1)
-    model_optimizer = tf.keras.optimizers.Adam(1e-5)
+    model = cnn_model(100, 12)
+    scheduler = 1e-3
+    # model_optimizer = tf.keras.optimizers.Adam(scheduler)
+    model.compile(
+        loss='mse',  # keras.losses.mean_squared_error
+        optimizer=tf.keras.optimizers.Adam(lr=scheduler),
+    )
 
     checkpoint_dir = 'training_checkpoint'
-    checkpoint_prefix = os.path.join(checkpoint_dir, 'ckpt')
-    checkpoint = tf.train.Checkpoint(model_optimizer=model_optimizer, model=model)
+    weight_filepath = 'training_weight'
+    # checkpoint_tb_dir = 'training_checkpoint_for_tb'
+    # checkpoint_prefix = os.path.join(checkpoint_dir, 'ckpt')
+    # checkpoint = tf.train.Checkpoint(model_optimizer=model_optimizer, model=model)
 
     train_loss = tf.keras.metrics.Mean(name='train_loss')
-    train_accuracy = tf.keras.metrics.MeanSquaredError(name='train_accuracy')
+    train_accuracy = tf.keras.metrics.RootMeanSquaredError(name='rmse')
 
     test_loss = tf.keras.metrics.Mean(name='test_loss')
-    test_accuracy = tf.keras.metrics.MeanSquaredError(name='test_accuracy')
+    test_accuracy = tf.keras.metrics.RootMeanSquaredError(name='rmse')
+    tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=checkpoint_dir,
+                                                          histogram_freq=0,
+                                                          write_graph=True,
+                                                          write_images=True,
+                                                          update_freq='epoch',
+                                                          embeddings_freq=0,
+                                                          embeddings_metadata=None)
+
+    scheduler = tf.keras.callbacks.LearningRateScheduler(scheduler)
+    checkpoint = ModelCheckpoint(weight_filepath, monitor='loss', verbose=2, save_weights_only=True, period=10)
+    callbacks_list = [tensorboard_callback, checkpoint, scheduler]
 
     test_stamp = 48
 
@@ -198,13 +213,24 @@ if __name__ == '__main__':
     train_model_inputs = tf.Variable(train_X)
     train_outputs = tf.Variable(train_Y)
     train_dataset = tf.data.Dataset.from_tensor_slices((train_model_inputs, train_outputs))
-    train_batched_dataset = train_dataset.batch(1)
+    train_batched_dataset = train_dataset.batch(12)
     test_model_inputs = tf.Variable(test_X)
     test_outputs = tf.Variable(test_Y)
     test_dataset = tf.data.Dataset.from_tensor_slices((test_model_inputs, test_outputs))
-    test_batched_dataset = test_dataset.batch(1)
+    test_batched_dataset = test_dataset.batch(12)
+    print(train_model_inputs.shape)
+    # training_history = model.fit(
+    #     train_model_inputs,  # input
+    #     train_outputs,  # output
+    #     batch_size=12,
+    #     verbose=0,  # Suppress chatty output; use Tensorboard instead
+    #     epochs=100,
+    #     validation_data=(test_model_inputs, test_outputs),
+    #     callbacks=[callbacks_list],
+    # )
 
-    train(train_batched_dataset, test_batched_dataset, 1000)
+    # train(train_batched_dataset, test_batched_dataset, 1000)
+
     #
     # ckpt_manager = tf.train.CheckpointManager(checkpoint, checkpoint_dir, max_to_keep=5)
     #
